@@ -116,6 +116,16 @@ public class PopupWindow: NSPanel, NSWindowDelegate {
         self.delegate = self
     }
     
+    // NSPopover supplies its own dynamic system material. Remove our legacy
+    // titlebar/background stack instead of placing another material over it.
+    public func prepareForNativePopover(_ popover: NSPopover) {
+        self.viewController.useNativeMaterial(popover)
+    }
+
+    public func setPopoverDetached(_ state: Bool) {
+        self.viewController.setCloseButton(state)
+    }
+
     public func windowWillMove(_ notification: Notification) {
         self.viewController.setCloseButton(true)
         self.locked = true
@@ -178,6 +188,10 @@ internal class PopupViewController: NSViewController {
     fileprivate func setCloseButton(_ state: Bool) {
         self.popup.setCloseButton(state)
     }
+
+    fileprivate func useNativeMaterial(_ popover: NSPopover) {
+        self.popup.useNativeMaterial(popover)
+    }
 }
 
 internal class PopupView: NSView {
@@ -185,6 +199,7 @@ internal class PopupView: NSView {
     
     private var foreground: NSVisualEffectView
     private var background: NSView
+    private weak var nativePopover: NSPopover?
     
     private let header: HeaderView
     private let body: NSScrollView
@@ -279,6 +294,11 @@ internal class PopupView: NSView {
         }
     }
     
+    fileprivate func useNativeMaterial(_ popover: NSPopover) {
+        self.nativePopover = popover
+        self.foreground.isHidden = true
+    }
+
     fileprivate func setTitle(_ newTitle: String) {
         self.header.setTitle(newTitle)
     }
@@ -326,7 +346,8 @@ internal class PopupView: NSView {
             windowSize.width = screenWidth
         }
         
-        self.window?.setContentSize(windowSize)
+        if let native = self.nativePopover { native.contentSize = windowSize }
+        else { self.window?.setContentSize(windowSize) }
         self.foreground.setFrameSize(windowSize)
         self.background.setFrameSize(windowSize)
         self.resizeBody(windowSize, scrollVisible: isScrollVisible)

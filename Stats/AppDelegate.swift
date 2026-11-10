@@ -176,7 +176,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDele
     
     internal func ensureSettingsWindow() -> SettingsWindow {
         if let w = self.settingsWindow { return w }
+        // Create the main window with normal Space semantics, then immediately
+        // restore the menu-bar application's previous activation policy.
+        let previousPolicy = NSApp.activationPolicy()
+        let changedPolicy = previousPolicy == .accessory && NSApp.setActivationPolicy(.regular)
         let w = SettingsWindow()
+        if changedPolicy { NSApp.setActivationPolicy(previousPolicy) }
         w.onClose = { [weak self] in
             self?.settingsWindow = nil
             self?.tryToShowSupportWindow(interaction: true)

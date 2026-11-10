@@ -12,16 +12,23 @@
 import Cocoa
 import Kit
 
-internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
+internal class CombinedView: NSObject, NSGestureRecognizerDelegate, NSPopoverDelegate {
     private var menuBarItem: NSStatusItem? = nil
     private var view: NSView = NSView(frame: NSRect(x: 0, y: 0, width: 0, height: Constants.Widget.height))
     private var popup: PopupWindow? = nil
+    private var nativePopover: NSPopover?
+    private var popoverAppearanceObservation: NSKeyValueObservation?
+    private weak var detachedPopoverWindow: NSWindow?
+    private let denseView = DenseCombinedView()
     
     private var status: Bool {
         Store.shared.bool(key: "CombinedModules", defaultValue: false) && !Store.shared.bool(key: "pause", defaultValue: false)
     }
     private var iconOnly: Bool {
-        Store.shared.bool(key: "CombinedModules_icon", defaultValue: false)
+        CombinedModulesMode.current == .icon
+    }
+    private var dense: Bool {
+        CombinedModulesMode.current == .dense
     }
     private var spacing: CGFloat {
         CGFloat(Int(Store.shared.string(key: "CombinedModules_spacing", defaultValue: "")) ?? 0)
@@ -43,7 +50,13 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
         super.init()
         
         modules.forEach { (m: Module) in
+            m.menuBar.combinedValuesCallback = { [weak self] in
+                guard let self = self, self.status, self.dense else { return }
+                self.updateDenseValues()
+            }
+            let moduleName = m.name
             m.menuBar.callback = { [weak self] in
+                if self?.dense == true && DenseCombinedView.moduleNames.contains(moduleName) { return }
                 if let s = self?.status, s {
                     DispatchQueue.main.async(execute: {
                         self?.recalculate()
@@ -53,6 +66,18 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
         }
         
         self.popup = PopupWindow(title: "Combined modules", module: .combined, view: Popup()) { _ in }
+        if #available(macOS 26.0, *), let popup = self.popup {
+            let popover = NSPopover()
+            popup.prepareForNativePopover(popover)
+            popover.behavior = .transient
+            popover.animates = false
+            popover.contentViewController = popup.contentViewController
+            popover.delegate = self
+            self.nativePopover = popover
+            self.popoverAppearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.initial, .new]) { [weak self] app, _ in
+                self?.nativePopover?.appearance = app.effectiveAppearance
+            }
+        }
         
         if self.status {
             self.enable()
@@ -90,6 +115,9 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
     }
     
     public func disable() {
+        self.nativePopover?.close()
+        self.detachedPopoverWindow?.close()
+        self.detachedPopoverWindow = nil
         self.popup?.setIsVisible(false)
         if let item = self.menuBarItem {
             NSStatusBar.system.removeStatusItem(item)
@@ -110,8 +138,16 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
         
         let visibleModules = self.activeModules.filter({ !$0.menuBar.activeWidgets.isEmpty })
         var w: CGFloat = 0
-        visibleModules.enumerated().forEach { (i, m) in
-            if i != 0 {
+        // Keep unrelated modules available when Dense summarizes CPU/GPU/RAM/Sensors.
+        let horizontalModules = self.dense ? visibleModules.filter { !DenseCombinedView.moduleNames.contains($0.name) } : visibleModules
+        if self.dense {
+            self.updateDenseValues()
+            self.denseView.setFrameSize(NSSize(width: DenseCombinedView.width, height: self.denseView.frame.height))
+            self.view.addSubview(self.denseView)
+            w = self.denseView.frame.width
+        }
+        horizontalModules.enumerated().forEach { (i, m) in
+            if i != 0 || self.dense {
                 w += self.spacing
                 if self.separator {
                     self.view.addSubview(SeparatorLineView(frame: NSRect(x: w, y: 3, width: 1, height: Constants.Widget.height-6)))
@@ -124,6 +160,13 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
         }
         self.view.setFrameSize(NSSize(width: w, height: self.view.frame.height))
         self.menuBarItem?.length = w
+    }
+
+    private func updateDenseValues() {
+        func values(_ name: String) -> CombinedValues {
+            modules.first(where: { $0.name == name && $0.enabled })?.menuBar.combinedValues ?? CombinedValues()
+        }
+        self.denseView.update(cpu: values("CPU"), gpu: values("GPU"), memory: values("RAM"), sensors: values("Sensors"))
     }
     
     // call when popup appear/disappear
@@ -140,7 +183,17 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
     private func openModulePopup() {
         guard let window = self.menuBarItem?.button?.window else { return }
         let location = self.view.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-        let visibleModules = self.activeModules.filter({ !$0.menuBar.activeWidgets.isEmpty })
+        if self.dense, location.x < self.denseView.frame.width {
+            let name = self.denseView.module(at: location)
+            guard let module = self.activeModules.first(where: { $0.name == name }) else { return }
+            NotificationCenter.default.post(name: .togglePopup, object: nil, userInfo: [
+                "module": module.name,
+                "origin": window.frame.origin,
+                "center": window.frame.width/2
+            ])
+            return
+        }
+        let visibleModules = self.activeModules.filter({ !$0.menuBar.activeWidgets.isEmpty && (!self.dense || !DenseCombinedView.moduleNames.contains($0.name)) })
         guard let module = visibleModules.last(where: { $0.menuBar.view.frame.minX <= location.x }) ?? visibleModules.first else { return }
         
         var userInfo: [String: Any] = [
@@ -157,6 +210,21 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
     }
     
     private func togglePopup() {
+        if let native = self.nativePopover, let button = self.menuBarItem?.button {
+            if native.isShown {
+                native.performClose(nil)
+            } else if let detached = self.detachedPopoverWindow, detached.isVisible {
+                detached.close()
+                self.detachedPopoverWindow = nil
+            } else {
+                self.detachedPopoverWindow?.close()
+                self.detachedPopoverWindow = nil
+                self.popup?.setPopoverDetached(false)
+                native.contentSize = native.contentViewController?.view.intrinsicContentSize ?? .zero
+                native.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            }
+            return
+        }
         guard let popup = self.popup, let item = self.menuBarItem, let window = item.button?.window else { return }
         
         if popup.occlusionState.rawValue == 8192 {
@@ -184,6 +252,13 @@ internal class CombinedView: NSObject, NSGestureRecognizerDelegate {
         }
     }
     
+    func popoverShouldDetach(_ popover: NSPopover) -> Bool { true }
+
+    func popoverDidDetach(_ popover: NSPopover) {
+        self.detachedPopoverWindow = popover.contentViewController?.view.window
+        self.popup?.setPopoverDetached(true)
+    }
+
     @objc private func listenForStateChange(_ notification: Notification) {
         guard notification.userInfo?["module"] == nil else { return }
         

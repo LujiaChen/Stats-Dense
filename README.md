@@ -1,167 +1,75 @@
-# Stats
+# Stats Dense
 
-<a href="https://github.com/exelban/stats/releases"><p align="center"><img src="https://cdn.mac-stats.com/assets/icon.png" width="120"></p></a>
+**A compact menu bar dashboard for small-screen Macs.**
 
-[![Stats](https://cdn.mac-stats.com/assets/images/menus.png)](https://github.com/exelban/stats/releases)
-[![Stats](https://cdn.mac-stats.com/assets/images/popups.png)](https://github.com/exelban/stats/releases)
+Keep the numbers you check most often visible without letting your system monitor take over the menu bar. Stats Dense is an independent fork of [Stats](https://github.com/exelban/stats), with a two-row dashboard designed for MacBooks where menu bar space is scarce.
 
-macOS system monitor in your menu bar
+> **Current scope: five fixed metrics.** Dense always displays **CPU usage, GPU usage, RAM usage, temperature, and system power**. These slots cannot currently be replaced with network speed, disk activity, fan speed, or other metrics. This is a focused five-metric layout, not a general-purpose compact layout for arbitrary widgets.
 
-## Installation
-### Manual
-You can download the latest version [here](https://github.com/exelban/stats/releases/latest/download/Stats.dmg).
-This will download a file called `Stats.dmg`. Open it and move the app to the application folder.
+<p align="center"><img src="docs/assets/dense-preview.png" width="270" alt="Two-row dashboard: C 23%, G 56%, M 78%; 54 degrees and 9.5 watts."></p>
 
-### Homebrew
-To install it using Homebrew, open the Terminal app and type:
-```bash
-brew install stats
+*Source-rendered preview at enlarged scale; the actual menu bar uses native text sizing.*
+
+## What changes
+
+- **All five readings stay visible.** CPU, GPU, and RAM share the top row; temperature and power sit below.
+- **Fixed, compact width.** Digit changes do not resize the status item or animate the surrounding menu bar. On the tested Mac, the dashboard uses **90 pt of content / 106 pt including native macOS spacing**. Font and OS differences can affect measurements.
+- **Readable grouping.** Smaller C/G/M labels stay attached to the numbers, with monospaced digits and no added outer padding. Ordinary readings retain their font dimensions; long percentage readings fit horizontally without losing digits or the `%` sign.
+- **Existing data readers.** Dense reuses Stats' CPU, GPU, RAM, and Sensors samples. It adds no independent reader or polling timer.
+- **Native popup material.** On macOS 26 and later, the Combined popup uses `NSPopover` and its system-provided material. Older systems retain the existing popup path. Light/Dark appearance and system accessibility behavior remain under AppKit's control.
+- **Other modes remain available.** Normal Combined and Icon Only are retained. Other enabled modules can appear beside Dense using their original horizontal widgets; they do not become additional Dense slots.
+
+## Install
+
+Download the app ZIP from [Releases](https://github.com/LujiaChen/Stats-Dense/releases), extract **Stats Dense.app**, and place it in Applications.
+
+The preview build is locally signed, **not Developer ID notarized**. macOS may require manual approval to open it. If you prefer, build the app yourself using the instructions below.
+
+Quit the original Stats and any other copy before launching Dense. The fork has separate preferences through bundle identifier `eu.exelban.Stats.Dense`, but inherited support services and history storage are not fully isolated. Enable launch at login from the app's settings if desired.
+
+**Updates are manual for this fork.** A manual update check opens this repository's Releases page; the Dense build does not install upstream Stats updates over itself.
+
+## Enable Dense
+
+1. Open the app's settings.
+2. Enable **CPU**, **GPU**, **RAM**, and **Sensors**, with an active widget for each.
+3. Enable **Combined modules** and select **Dense** under **Display mode**.
+4. Keep **Combined details** enabled to open the Combined popup from the menu bar.
+
+Dense shows the readings supplied by those modules, regardless of whether their normal widget is configured as a mini value, chart, or another style. Changing a widget style does **not** reassign a Dense slot.
+
+## Limitations
+
+- **The five metrics are fixed.** Disabling a required module leaves its placeholder; another module is not substituted. Arbitrary slots, custom ordering, and alternate Dense metric sets are not implemented.
+- **Temperature selection follows Sensors.** It prefers an enabled temperature sensor in the existing stack order, then Average CPU, then an available temperature sensor. The temperature unit preference is respected.
+- **Power means System Total (`PSTR`).** Selecting a different power sensor does not replace it in Dense. Macs without a usable `PSTR` reading show `--W`.
+- **Hardware availability varies.** Missing GPU or sensor readings are shown as placeholders, not invented values. The Dense-specific runtime checks were performed on an Apple M5 MacBook Air; Intel and other chips have not been verified for this fork.
+- **No overflow workaround.** Dense reduces its own footprint. It does not bypass the notch, alter system menu bar spacing, or guarantee that every enabled extra module will fit.
+- **No battery-life percentage claim.** Continuous status-item width animation was removed to avoid repeated system menu bar layout work. Actual energy use still depends on enabled readers, hardware, and activity.
+- **Local preview packaging omits the optional desktop WidgetKit extension.** The extension's source remains in the project; a signed desktop-widget distribution is not part of this preview.
+
+## Build from source
+
+The project retains upstream's macOS 12 deployment target. Use a recent full Xcode installation with the macOS SDK and command-line tools selected. The current local build was verified with Xcode 27.0 on macOS 27.3; that is a beta environment, not a claim of upstream beta support.
+
+```sh
+git clone https://github.com/LujiaChen/Stats-Dense.git
+cd Stats-Dense
+./Scripts/build-dense.sh
 ```
 
-### Headless (SSH)
-To install Stats remotely over SSH and set it up as a remote monitoring agent, run:
-```bash
-curl -fsSL https://cdn.mac-stats.com/install.sh | bash
-```
-The script installs the app, enables the Remote module and prints a URL with an authorization code - open it on any device and sign in to your System Stats account to authorize the machine. After that Stats starts streaming metrics to your account and is registered to launch automatically at login and restart if it stops.
-The Mac needs an active user session (a locked screen is fine) to run the app; on a fully headless machine Stats will start at the next login.
+The helper builds a Universal Release, creates `dist/Stats Dense.app` with its independent identity, applies an ad-hoc signature, and verifies it. It does not install the app or change login items. An existing output app is left untouched; use a clean output directory for another build.
 
-### Uninstall
-Run the uninstall script bundled with the app (requires administrator privileges to remove the SMC helper):
-```bash
-sh /Applications/Stats.app/Contents/Resources/Scripts/uninstall.sh
-```
+See [BUILDING.md](docs/BUILDING.md) for Xcode, test, and packaging details.
 
-### Legacy version
-Legacy version for older systems could be found [here](https://mac-stats.com/downloads).
+## Development
 
-## Requirements
-Stats is supported on macOS 12 (Monterey) and newer.
-Beta versions of macOS are not supported - only stable releases.
+Dense presentation lives in `Stats/Views/DenseCombinedView.swift`; `CombinedView.swift` hosts it and the existing popup. CPU/GPU/RAM/Sensors publish small, deduplicated snapshots through `CombinedValues`. The main settings window also retains the fork's Space-lifecycle correction.
 
-## Features
-Stats is an application that allows you to monitor your macOS system.
+The implementation is based on **Stats v3.0.25**, commit `27fa75a53d57072ec06adc730dcfe67633d639d2`. See [architecture and validation notes](docs/DEVELOPMENT.md) and [contribution guidance](CONTRIBUTING.md).
 
- - CPU utilization
- - GPU utilization
- - Memory usage
- - Disk utilization
- - Network usage
- - Battery level
- - Fan's control (not maintained)
- - Sensors information (Temperature/Voltage/Power)
- - Bluetooth devices
- - Multiple time zone clock
+## Credits and license
 
-## FAQs
+Stats Dense builds on the work of **Serhiy Mytrovtsiy (exelban) and the Stats contributors**. It is independent of, and is not an official release from, the upstream maintainer.
 
-### How do you change the order of the menu bar icons?
-macOS decides the order of the menu bar items not `Stats` - it may change after the first reboot after installing Stats.
-
-To change the order of any menu bar icon - macOS Mojave (version 10.14) and up.
-
-1. Hold down ⌘ (command key).
-2. Drag the icon to the desired position on the menu bar.
-3. Release ⌘ (command key)
-
-### Stats icons do not appear in the menu bar
-macOS 26 introduced a new privacy control under System Settings → Menu Bar. Apps must be explicitly allowed there to display menu bar items. If Stats is running with at least one module active and one widget enabled, but none of its icons show up in the menu bar, this is almost certainly the cause. More details you can find [here](https://github.com/exelban/stats/issues/3120).
-
-**Solution:** open **System Settings → Menu Bar** and toggle **Stats** ON.
-
-### Desktop widgets not showing the data
-Due to a problem with high data load in the system process (`chronod`) responsible for communication between the app and widgets, communication is disabled by default on the Stats side. To enable it, the `macOS widgets` option must be enabled in the Stats settings. More details you can find [here](https://github.com/exelban/stats/issues/2733).
-
-**Solution:** open **Stats Settings** and toggle **macOS widgets** ON.
-
-### Wi-Fi network name shows Unknown
-macOS requires Location Services permission to read the Wi-Fi network name. If access for Stats is disabled, the network name may show as `Unknown` without a permission popup.
-
-**Solution:** open **System Settings → Privacy & Security → Location Services**, make sure Location Services is enabled, and toggle **Stats** ON. Then quit and reopen Stats.
-
-### How to reduce energy impact or CPU usage of Stats?
-Stats tries to be efficient as it's possible. But reading some data periodically is not a cheap task. Each module has its own "price". So, if you want to reduce energy impact from the Stats you need to disable some Stats modules. The most inefficient modules are Sensors and Bluetooth. Disabling these modules could reduce CPU usage and power efficiency by up to 50% in some cases.
-
-### Fan control
-Fan control is in legacy mode. It does not receive any updates or fixes. It's not dropped from the app just because in the old Macs it works pretty acceptable. I'm open to accepting fixed or improvements (via PR) for this feature in case someone would like to help with that. But have no option and time to provide support for this feature.
-
-### Sensors show incorrect CPU/GPU core count
-CPU/GPU sensors are simply thermal zones (sensors) on the CPU/GPU. They have no relation to the number of cores or specific cores.
-For example, a CPU is typically divided into two clusters: efficiency and performance. Each cluster contains multiple temperature sensors, and Stats simply displays these sensors. However, "CPU Efficient Core 1" does not represent the temperature of a single efficient core—it only indicates one of the temperature sensors within the efficiency core cluster.
-Additionally, with each new SoC, Apple changes the sensor keys. As a result, it takes time to determine which SMC values correspond to the appropriate sensors. If anyone knows how to accurately match the sensors for Apple Silicon, please contact me.
-
-### App crash – what to do?
-First, ensure that you are using the latest version of Stats. There is a high chance that a fix preventing the crash has already been released. If you are already running the latest version, search both [open and closed issues](https://github.com/exelban/stats/issues?q=is%3Aissue). If the crash has already been reported, add new diagnostic information to the existing issue when comments are open instead of opening a duplicate. Otherwise, use the [bug report form](https://github.com/exelban/stats/issues/new?template=bug_report.yml) and include your Mac model, chip, macOS version and build, Stats version, steps to reproduce, and the complete crash report from Console.
-
-### Why my issue was closed without any response?
-Most probably because it's a duplicated issue and there is an answer to the question, report, or proposition. Please use a search by closed issues to get an answer.
-So, if your issue was closed without any response, most probably it already has a response.
-
-### External API
-Stats does not collect any telemetry or analytics. The only external requests it makes are to the following APIs:
-
-- https://api.mac-stats.com – For update checks and retrieving the public IP address
-- https://api.github.com – Fallback for update checks
-
-Both of these APIs are used to check for updates. Additionally, an external request is required to obtain the public IP address. I do not want to use any third-party providers for retrieving the public IP address, so I use my own server for this purpose.
-
-If you have concerns about these requests, you have a few options:
-
-- propose a PR that allows these features to work without an external server
-- block both of these servers using any network filtering app (if you're reading this, you're likely using something like Little Snitch, so you can easily do this). In this case do not expect to receive any updates or see your public IP in the network module.
-
-### How to contribute to the project?
-If you want to develop a new feature, or you've found something that doesn't work, the first step is to open an issue so the feature or problem can be discussed. Pull requests should only be opened for existing issues and after discussion; otherwise, they may be closed automatically. There are a few cases where this can be skipped: language changes, and contributors who have already made significant contributions and whose implementations align well with the project.
-
-## Open source, but not open contribution
-Stats is an open-source project: the full source code is available under the MIT license, and you are free to read it, learn from it, fork it, and build your own version of the app.
-
-However, it is not an open-contribution project. Stats is developed and maintained by a single person, and keeping the project stable and coherent takes priority over accepting every proposed change. Reviewing external code, testing it across different Macs and macOS versions, and maintaining it afterward often takes more time than writing it in the first place.
-
-For that reason, unsolicited pull requests are generally not accepted and may be closed without review. If you want to change or add something, please open an issue first so it can be discussed. The exceptions are translations and language fixes, which are always welcome, and contributions from people who have already made significant contributions to the project.
-
-The best ways to support the project are reporting bugs, improving translations, and proposing ideas through issues.
-
-## Supported languages
-- English
-- Polski
-- Українська
-- Русский
-- 中文 (简体) (thanks to [chenguokai](https://github.com/chenguokai), [Tai-Zhou](https://github.com/Tai-Zhou), and [Jerry](https://github.com/Jerry23011))
-- Türkçe (thanks to [yusufozgul](https://github.com/yusufozgul) and [setanarut](https://github.com/setanarut))
-- 한국어 (thanks to [escapeanaemia](https://github.com/escapeanaemia) and [iamhslee](https://github.com/iamhslee))
-- German (thanks to [natterstefan](https://github.com/natterstefan) and [aneitel](https://github.com/aneitel))
-- 中文 (繁體) (thanks to [iamch15542](https://github.com/iamch15542) and [jrthsr700tmax](https://github.com/jrthsr700tmax))
-- Spanish (thanks to [jcconca](https://github.com/jcconca))
-- Vietnamese (thanks to [HXD.VN](https://github.com/xuandung38))
-- French (thanks to [RomainLt](https://github.com/RomainLt))
-- Italian (thanks to [gmcinalli](https://github.com/gmcinalli))
-- Portuguese (Brazil) (thanks to [marcelochaves95](https://github.com/marcelochaves95) and [pedroserigatto](https://github.com/pedroserigatto))
-- Norwegian Bokmål (thanks to [rubjo](https://github.com/rubjo))
-- 日本語 (thanks to [treastrain](https://github.com/treastrain))
-- Portuguese (Portugal) (thanks to [AdamModus](https://github.com/AdamModus))
-- Czech (thanks to [mpl75](https://github.com/mpl75))
-- Magyar (thanks to [moriczr](https://github.com/moriczr))
-- Bulgarian (thanks to [zbrox](https://github.com/zbrox))
-- Romanian (thanks to [razluta](https://github.com/razluta))
-- Dutch (thanks to [ngohungphuc](https://github.com/ngohungphuc))
-- Hrvatski (thanks to [milotype](https://github.com/milotype))
-- Danish (thanks to [casperes1996](https://github.com/casperes1996) and [aleksanderbl29](https://github.com/aleksanderbl29))
-- Catalan (thanks to [davidalonso](https://github.com/davidalonso))
-- Indonesian (thanks to [yooody](https://github.com/yooody))
-- Hebrew (thanks to [BadSugar](https://github.com/BadSugar))
-- Slovenian (thanks to [zigapovhe](https://github.com/zigapovhe))
-- Greek (thanks to [sudoxcess](https://github.com/sudoxcess) and [vaionicle](https://github.com/vaionicle))
-- Persian (thanks to [ShawnAlisson](https://github.com/ShawnAlisson))
-- Slovenský (thanks to [martinbernat](https://github.com/martinbernat))
-- Thai (thanks to [apiphoomchu](https://github.com/apiphoomchu))
-- Estonian (thanks to [postylem](https://github.com/postylem))
-- Hindi (thanks to [patiljignesh](https://github.com/patiljignesh))
-- Finnish (thanks to [eightscrow](https://github.com/eightscrow))
-- Bengali (thanks to [adnan29979](https://github.com/adnan29979))
-- Tamil (thanks to [sabapathy7](https://github.com/sabapathy7))
-
-You can help by adding a new language or improving the existing translation.
-
-## License
-[MIT License](https://github.com/exelban/stats/blob/master/LICENSE)
+[MIT license](LICENSE). Original notices are preserved. The bundled LevelDB license is retained in [Kit/lldb/LICENSE.txt](Kit/lldb/LICENSE.txt). See [NOTICE.md](NOTICE.md) and the preserved [upstream README](docs/UPSTREAM.md).

@@ -14,3 +14,11 @@ SMC/smc
 
 Cartfile.resolved
 web
+
+# Stats Dense local build outputs
+/.build/
+/dist/
+/Stats Dense.app/
+*.xcresult/
+
+/Stats-Dense-preview.zip

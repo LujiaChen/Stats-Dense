@@ -85,6 +85,8 @@ public class Sensors: Module {
         }
         
         self.setReaders([self.sensorsReader])
+        NotificationCenter.default.addObserver(self, selector: #selector(updateReaderSleep), name: .moduleRearrange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateReaderSleep), name: .toggleOneView, object: nil)
     }
     
     public override func willTerminate() {
@@ -101,13 +103,26 @@ public class Sensors: Module {
     
     private func usageCallback(_ raw: Sensors_List?) {
         guard let value = raw, self.enabled else { return }
+
+        let sensors = value.sensors
+        let temperature = sensors.filter { $0.type == .temperature && $0.state }.sorted {
+            Store.shared.int(key: "stack_\($0.key)_index", defaultValue: -1) <
+                Store.shared.int(key: "stack_\($1.key)_index", defaultValue: -1)
+        }.first ?? sensors.first { $0.key == "Average CPU" } ?? sensors.first { $0.type == .temperature }
+        let power = sensors.first { $0.key == "PSTR" }
+        self.menuBar.setCombinedValues(CombinedValues(
+            temperature: temperature?.value,
+            power: power?.value,
+            temperatureLabel: temperature?.name,
+            powerLabel: power?.name
+        ))
         
         self.popupView.usageCallback(value.sensors)
         self.portalView.usageCallback(value.sensors)
         self.notificationsView.usageCallback(value.sensors)
         
         let activeWidgets = self.menuBar.widgets.filter{ $0.isActive }
-        self.sensorsReader?.sleepMode(state: activeWidgets.contains(where: {$0.item is Label}) && activeWidgets.count == 1)
+        self.updateReaderSleep()
         
         activeWidgets.forEach { (w: SWidget) in
             switch w.item {
@@ -154,5 +169,12 @@ public class Sensors: Module {
             default: break
             }
         }
+    }
+
+    @objc private func updateReaderSleep() {
+        guard self.enabled else { return }
+        let dense = Store.shared.bool(key: "CombinedModules", defaultValue: false) && CombinedModulesMode.current == .dense
+        let activeWidgets = self.menuBar.activeWidgets
+        self.sensorsReader?.sleepMode(state: !dense && activeWidgets.count == 1 && activeWidgets.contains { $0.item is Label })
     }
 }

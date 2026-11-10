@@ -26,9 +26,9 @@ class ApplicationSettings: NSStackView {
         get { Store.shared.bool(key: "CombinedModules", defaultValue: false) }
         set { Store.shared.set(key: "CombinedModules", value: newValue) }
     }
-    private var combinedModulesIcon: Bool {
-        get { Store.shared.bool(key: "CombinedModules_icon", defaultValue: false) }
-        set { Store.shared.set(key: "CombinedModules_icon", value: newValue) }
+    private var combinedModulesMode: CombinedModulesMode {
+        get { CombinedModulesMode.current }
+        set { CombinedModulesMode.current = newValue }
     }
     private var combinedModulesSpacing: String {
         get { Store.shared.string(key: "CombinedModules_spacing", defaultValue: "none") }
@@ -130,15 +130,20 @@ class ApplicationSettings: NSStackView {
             ))
         ]))
         
+        let combinedModeSelector = selectView(
+            action: #selector(self.toggleCombinedModulesMode),
+            items: CombinedModulesMode.options,
+            selected: self.combinedModulesMode.rawValue
+        )
+        combinedModeSelector.toolTip = localizedString(
+            "Dense shows CPU, GPU, RAM, temperature and system power in two rows. Enable CPU, GPU, RAM and Sensors to keep all five values updating."
+        )
         self.combinedModulesView = PreferencesSection([
             PreferencesRow(localizedString("Combined modules"), component: switchView(
                 action: #selector(self.toggleCombinedModules),
                 state: self.combinedModulesState
             )),
-            PreferencesRow(localizedString("Show icon instead of widgets"), component: switchView(
-                action: #selector(self.toggleCombinedModulesIcon),
-                state: self.combinedModulesIcon
-            )),
+            PreferencesRow(localizedString("Display mode"), component: combinedModeSelector),
             PreferencesRow(component: self.moduleSelector),
             PreferencesRow(localizedString("Spacing"), component: selectView(
                 action: #selector(self.toggleCombinedModulesSpacing),
@@ -384,13 +389,15 @@ class ApplicationSettings: NSStackView {
     
     private func updateCombinedModulesSettings() {
         self.combinedModulesView?.setRowVisibility(1, newState: self.combinedModulesState)
-        for row in 2...5 {
-            self.combinedModulesView?.setRowVisibility(row, newState: self.combinedModulesState && !self.combinedModulesIcon)
+        for row in 2...4 {
+            self.combinedModulesView?.setRowVisibility(row, newState: self.combinedModulesState && self.combinedModulesMode == .normal)
         }
+        self.combinedModulesView?.setRowVisibility(5, newState: self.combinedModulesState && self.combinedModulesMode != .icon)
     }
     
-    @objc private func toggleCombinedModulesIcon(_ sender: NSButton) {
-        self.combinedModulesIcon = sender.state == NSControl.StateValue.on
+    @objc private func toggleCombinedModulesMode(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String, let mode = CombinedModulesMode(rawValue: key) else { return }
+        self.combinedModulesMode = mode
         self.updateCombinedModulesSettings()
         NotificationCenter.default.post(name: .moduleRearrange, object: nil, userInfo: nil)
     }

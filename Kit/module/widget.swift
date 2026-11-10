@@ -381,9 +381,30 @@ public class SWidget {
     }
 }
 
+// Values already delivered to a module's presentation layer. Combined layouts
+// can consume these independently of the user's selected widget types.
+public struct CombinedValues: Equatable {
+    public var utilization: Double?
+    public var temperature: Double? // Celsius; presentation applies the selected unit.
+    public var power: Double? // Instantaneous system power in watts.
+    public var temperatureLabel: String?
+    public var powerLabel: String?
+
+    public init(utilization: Double? = nil, temperature: Double? = nil, power: Double? = nil,
+                temperatureLabel: String? = nil, powerLabel: String? = nil) {
+        self.utilization = utilization
+        self.temperature = temperature
+        self.power = power
+        self.temperatureLabel = temperatureLabel
+        self.powerLabel = powerLabel
+    }
+}
+
 public class MenuBar {
     public var callback: (() -> Void)? = nil
     public var widgets: [SWidget] = []
+    public private(set) var combinedValues = CombinedValues()
+    public var combinedValuesCallback: (() -> Void)? = nil
     
     private var moduleName: String
     private var menuBarItem: NSStatusItem? = nil
@@ -464,6 +485,14 @@ public class MenuBar {
         }
         self.widgets.append(widget)
     }
+
+    public func setCombinedValues(_ values: CombinedValues) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.combinedValues != values else { return }
+            self.combinedValues = values
+            self.combinedValuesCallback?()
+        }
+    }
     
     public func enable() {
         if self.oneView && !self.combinedModules {
@@ -477,6 +506,7 @@ public class MenuBar {
     public func disable() {
         self.widgets.forEach{ $0.disable() }
         self.active = false
+        self.setCombinedValues(CombinedValues())
         if self.oneView {
             self.setupMenuBarItem(false)
         }

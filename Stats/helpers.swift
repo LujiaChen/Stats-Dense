@@ -173,6 +173,14 @@ extension AppDelegate {
     }
     
     internal func checkForNewVersion(silent: Bool = false) {
+        // Dense is distributed independently. Never replace it with an
+        // upstream Stats update; manual checks open this fork's releases.
+        if Bundle.main.bundleIdentifier == "eu.exelban.Stats.Dense" {
+            if !silent, let url = URL(string: "https://github.com/LujiaChen/Stats-Dense/releases") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
         updater.check { result, error in
             if error != nil {
                 debug("error updater.check(): \(error!.localizedDescription)")

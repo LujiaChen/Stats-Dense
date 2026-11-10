@@ -1,21 +1,37 @@
-name: build
+name: Build Stats Dense
 
 on:
   push:
-    branches:
-      - master
+    branches: [stats-dense]
   pull_request:
-    branches:
-      - master
+    branches: [stats-dense]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: dense-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: macos-latest
-
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
-      - run: xcodebuild -scheme Stats -destination 'platform=macOS' -configuration Release archive CODE_SIGNING_ALLOWED=NO
+      - uses: actions/checkout@v7.0.1
+      - name: Build the independent Dense app
+        run: ./Scripts/build-dense.sh
+      - name: Compile presentation tests
+        run: >-
+          xcodebuild -project Stats.xcodeproj -scheme Stats
+          -configuration Debug -destination 'platform=macOS'
+          -derivedDataPath .build/tests CODE_SIGNING_ALLOWED=NO
+          build-for-testing
+      - name: Package local preview
+        run: ditto -c -k --sequesterRsrc --keepParent dist Stats-Dense-preview.zip
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: Stats-Dense-preview
+          path: Stats-Dense-preview.zip
+          retention-days: 14

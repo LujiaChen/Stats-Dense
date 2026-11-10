@@ -193,6 +193,7 @@ public class GPU: Module {
         guard let utilization = selectedGPU.utilization else {
             return
         }
+        self.menuBar.setCombinedValues(CombinedValues(utilization: utilization))
         
         self.popupView.loadCallback(selectedGPU)
         self.portalView.callback(selectedGPU)

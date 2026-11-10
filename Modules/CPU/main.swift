@@ -196,6 +196,7 @@ public class CPU: Module {
     
     private func loadCallback(_ raw: CPU_Load?) {
         guard let value = raw, self.enabled else { return }
+        self.menuBar.setCombinedValues(CombinedValues(utilization: value.totalUsage))
         
         self.popupView.loadCallback(value)
         self.portalView.callback(value)

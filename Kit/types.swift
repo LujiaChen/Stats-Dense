@@ -65,6 +65,31 @@ public let TemperatureUnits: [KeyValue_t] = [
     KeyValue_t(key: "fahrenheit", value: "Fahrenheit", additional: UnitTemperature.fahrenheit)
 ]
 
+public enum CombinedModulesMode: String {
+    case normal
+    case dense
+    case icon
+
+    public static let options: [KeyValue_t] = [
+        KeyValue_t(key: CombinedModulesMode.normal.rawValue, value: "Normal"),
+        KeyValue_t(key: CombinedModulesMode.dense.rawValue, value: "Dense"),
+        KeyValue_t(key: CombinedModulesMode.icon.rawValue, value: "Icon only")
+    ]
+
+    public static var current: CombinedModulesMode {
+        get {
+            let stored = Store.shared.string(key: "CombinedModules_mode", defaultValue: "")
+            return CombinedModulesMode(rawValue: stored) ??
+                (Store.shared.bool(key: "CombinedModules_icon", defaultValue: false) ? .icon : .normal)
+        }
+        set {
+            Store.shared.set(key: "CombinedModules_mode", value: newValue.rawValue)
+            // Keep exported settings compatible with versions predating display modes.
+            Store.shared.set(key: "CombinedModules_icon", value: newValue == .icon)
+        }
+    }
+}
+
 public let CombinedModulesSpacings: [KeyValue_t] = [
     KeyValue_t(key: "none", value: "None"),
     KeyValue_t(key: "1", value: "1", additional: 1),
