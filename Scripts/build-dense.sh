@@ -15,7 +15,15 @@ DENSE_STAGE="$(mktemp -d "$DENSE_OUTPUT/.dense.XXXXXX")"
 trap 'rm -rf -- "$DENSE_STAGE"' EXIT
 
 cd "$DENSE_ROOT"
-xcodebuild -project Stats.xcodeproj -scheme Stats     -configuration Release -destination 'platform=macOS'     -derivedDataPath "$DENSE_BUILD" CODE_SIGNING_ALLOWED=NO build
+# Keep local source paths out of debug metadata and #file/__FILE__ strings.
+printf -v DENSE_SWIFT_FLAGS '%s -file-prefix-map "%s" -debug-prefix-map "%s"' '$(inherited)' "$DENSE_ROOT=/Stats-Dense" "$DENSE_ROOT=/Stats-Dense"
+printf -v DENSE_C_FLAGS '%s -ffile-prefix-map="%s"' '$(inherited)' "$DENSE_ROOT=/Stats-Dense"
+xcodebuild -project Stats.xcodeproj -scheme Stats \
+    -configuration Release -destination 'platform=macOS' \
+    -derivedDataPath "$DENSE_BUILD" CODE_SIGNING_ALLOWED=NO \
+    "OTHER_SWIFT_FLAGS=$DENSE_SWIFT_FLAGS" \
+    "OTHER_CFLAGS=$DENSE_C_FLAGS" "OTHER_CPLUSPLUSFLAGS=$DENSE_C_FLAGS" \
+    SWIFT_SERIALIZE_DEBUGGING_OPTIONS=NO build
 
 DENSE_APP="$DENSE_STAGE/Stats Dense.app"
 ditto "$DENSE_BUILD/Build/Products/Release/Stats.app" "$DENSE_APP"
